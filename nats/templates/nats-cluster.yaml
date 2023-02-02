@@ -1,0 +1,174 @@
+{{ if hasKey .Values .Release.Namespace }}
+{{ $values := get .Values .Release.Namespace }}
+{{ $release := .Release }}
+{{ $count := (add $values.replicaCount | int) }}
+{{- range $i := until $count }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    volume.beta.kubernetes.io/storage-provisioner: kubernetes.io/aws-ebs
+  labels:
+    app: nats-{{ $i }}
+    component: nats
+    kind: pvc
+  name: {{ $release.Namespace }}-nats-{{ $i }}-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ required "nats.pvc.storage under namespace key is missing" $values.nats.pvc.storage }}
+  storageClassName: gp2
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats-{{ $i }}
+  labels:
+    app: nats-{{ $i }}
+    component: nats
+spec:
+  selector:
+    app: nats-{{ $i }}
+  clusterIP: None
+  ports:
+  - name: client
+    port: 4222
+  - name: cluster
+    port: 6222
+  - name: monitor
+    port: 8222
+  - name: metrics
+    port: 8081
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-config-{{ $i }}
+  labels:
+    app: nats-{{ $i }}
+    component: nats
+data:
+  nats.conf: |-
+    listen: 0.0.0.0:4222
+    http: 0.0.0.0:8222
+    server_name: nats-{{ $i }}
+    cluster {
+        name: nats-dev
+        listen: 0.0.0.0:6222
+        routes = [
+            {{- range $j := until $count }}
+            {{- if ne $i $j }}
+            nats://nats-{{ $j }}:6222
+            {{- end }}
+            {{- end }}
+        ]
+        connect_retries: 10
+    }
+    accounts: {
+      $SYS: {
+        users: [{user: sys, password: pass}]
+      }
+    }
+    jetstream {
+        store_dir: /nats/storage
+        max_memory_store: {{ required "nats.jetstream.memory under namespace key is missing" $values.nats.jetstream.memory }}
+        max_file_store: {{ required "nats.jetstream.file under namespace key is missing" $values.nats.jetstream.file }}
+    }
+    debug:   false
+    trace:   false
+    logtime: true
+    max_connections: 1024
+    max_control_line: 1024
+    max_payload: 2000000
+    write_deadline: "2s"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nats-{{ $i }}
+  labels:
+    app: nats-{{ $i }}
+    component: nats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nats-{{ $i }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: nats-{{ $i }}
+        component: nats
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                    - nats
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: metrics
+        image: {{ $values.metrics.image }}
+        imagePullPolicy: IfNotPresent
+        args: ["-varz", "-subz", "-connz", "-port=8081", "-routez", "http://localhost:8222"]
+        ports:
+        - containerPort: 8081
+          name: metrics
+        resources:
+          requests:
+            cpu: {{ required "metrics.requests.cpu under namespace key is missing" $values.metrics.requests.cpu }}
+            memory: {{ required "metrics.requests.memory under namespace key is missing" $values.metrics.requests.memory }}
+          limits:
+            cpu: {{ required "metrics.limits.cpu under namespace key is missing" $values.metrics.limits.cpu }}
+            memory: {{ required "metrics.limits.memory under namespace key is missing" $values.metrics.limits.memory }}
+      - name: nats
+        image: {{ $values.nats.image }}
+        imagePullPolicy: IfNotPresent
+        args: [ "--config", "/etc/nats/config/nats.conf"]
+        ports:
+        - containerPort: 4222
+          name: client
+        - containerPort: 6222
+          name: cluster
+        - containerPort: 8222
+          name: monitor
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8222
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+        resources:
+          requests:
+            cpu: {{ required "nats.requests.cpu under namespace key is missing" $values.nats.requests.cpu }}
+            memory: {{ required "nats.requests.memory under namespace key is missing" $values.nats.requests.memory }}
+          limits:
+            cpu: {{ required "nats.limits.cpu under namespace key is missing" $values.nats.limits.cpu }}
+            memory: {{ required "nats.limits.memory under namespace key is missing" $values.nats.limits.memory }}
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/nats/config
+        - name: jetstream-ebs-storage-path
+          mountPath: /nats/storage
+      volumes:
+      - name: config-volume
+        configMap:
+          name: nats-config-{{ $i }}
+      - name: jetstream-ebs-storage-path
+        persistentVolumeClaim:
+          claimName: {{ $release.Namespace }}-nats-{{ $i }}-pvc
+{{ end }}
+{{ else }}
+{{ fail "values should be specifiedunder a Namespace key" }}
+{{ end }}

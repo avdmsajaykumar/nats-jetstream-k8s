@@ -2,7 +2,28 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 3
-resourceProfile: "dev"
-isDrEnv: false
-nodeSelector: {}
+keycore-vault-dev:
+  metrics:
+    image: synadia/prometheus-nats-exporter:0.6.2
+    requests:
+      cpu: 50m
+      memory: 16Mi
+    limits:
+      cpu: 256m
+      memory: 64Mi
+  nats:
+    image: nats:2.9.15-alpine
+    jetstream:
+      file: 4G
+      memory: 256M
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 1500m
+      memory: 3Gi
+    pvc:
+      storage: 4Gi
+  replicaCount: 3
+
+      
