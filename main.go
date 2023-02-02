@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,12 @@ import (
 
 	"github.com/nats-io/nats.go"
 )
+
+type Input struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+	Date string `json:"date"`
+}
 
 func main() {
 	args := os.Args
@@ -105,14 +112,16 @@ func publish(js nats.JetStreamContext, exit <-chan struct{}) {
 }
 
 func pub(js nats.JetStreamContext, i int) {
-	input := fmt.Sprintf("%s %d: I am Batman", time.Now().Format(time.RFC3339), i)
-	_, err := js.Publish("DC.batman", []byte(input))
+	input := Input{i, "Batman", time.Now().Format(time.RFC3339)}
+	buf, _ := json.Marshal(input)
+	_, err := js.Publish("DC.batman", buf)
 	if err != nil {
 		fmt.Println("publish error : " + err.Error())
 	}
 
-	input = fmt.Sprintf("%s %d: Kryptonite", time.Now().Format(time.RFC3339), i)
-	_, err = js.Publish("DC.superman", []byte(input))
+	input = Input{i, "Superman", time.Now().Format(time.RFC3339)}
+	buf, _ = json.Marshal(input)
+	_, err = js.Publish("DC.superman", buf)
 	if err != nil {
 		fmt.Println("publish error: " + err.Error())
 	}
