@@ -4,6 +4,22 @@
 {{- range $i := until $count }}
 ---
 apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    volume.beta.kubernetes.io/storage-provisioner: kubernetes.io/aws-ebs
+  name: {{ $release.Namespace }}-nats-{{ $i }}-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: gp2
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: nats-{{ $i }}
@@ -148,15 +164,13 @@ spec:
         volumeMounts:
         - name: config-volume
           mountPath: /etc/nats/config
-        - name: jetstream-host-storage-path
+        - name: jetstream-ebs-storage-path
           mountPath: /nats/storage
       volumes:
       - name: config-volume
         configMap:
           name: nats-config-{{ $i }}
-      - name: jetstream-host-storage-path
-        hostPath:
-          path: /data/nats/nats-{{ $i }}
-          type: DirectoryOrCreate
-
+      - name: jetstream-ebs-storage-path
+        persistentVolumeClaim:
+          claimName: {{ $release.Namespace }}-nats-{{ $i }}-pvc
 {{ end }}
