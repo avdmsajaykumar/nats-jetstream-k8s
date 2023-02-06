@@ -8,6 +8,9 @@ kind: PersistentVolumeClaim
 metadata:
   annotations:
     volume.beta.kubernetes.io/storage-provisioner: kubernetes.io/aws-ebs
+  labels:
+    app: nats-{{ $i }}
+    component: nats
   name: {{ $release.Namespace }}-nats-{{ $i }}-pvc
 spec:
   accessModes:
@@ -24,6 +27,7 @@ kind: Service
 metadata:
   name: nats-{{ $i }}
   labels:
+    app: nats-{{ $i }}
     component: nats
 spec:
   selector:
@@ -78,8 +82,8 @@ kind: Deployment
 metadata:
   name: nats-{{ $i }}
   labels:
-    component: nats
     app: nats-{{ $i }}
+    component: nats
 spec:
   {{- if $values.isDrEnv }}
   replicas: 0
@@ -92,24 +96,19 @@ spec:
   template:
     metadata:
       labels:
-        component: nats
         app: nats-{{ $i }}
+        component: nats
     spec:
-      # affinity:
-      #   podAntiAffinity:
-      #     requiredDuringSchedulingIgnoredDuringExecution:
-      #     - labelSelector:
-      #         matchExpressions:
-      #           - key: component
-      #             operator: In
-      #             values:
-      #               - nats
-      #       topologyKey: kubernetes.io/hostname
-      #       namespaces: ["{{ $release.Namespace }}"]
-      # {{- if ne (( index $values.nodeSelector "kaas-node-type" ) | toString) "ci" }}
-      # nodeSelector:
-      #   {{ toYaml $values.nodeSelector }}
-      # {{- end }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                    - nats
+            topologyKey: kubernetes.io/hostname
       containers:
       - name: metrics
         image: synadia/prometheus-nats-exporter:0.6.2
