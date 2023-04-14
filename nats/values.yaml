@@ -23,7 +23,7 @@ keycore-vault-dev:
       cpu: 1500m
       memory: 3Gi
     pvc:
-      storage: 4Gi
+      storage: 5Gi
   replicaCount: 3
 
       

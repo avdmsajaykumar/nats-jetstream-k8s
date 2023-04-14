@@ -50,6 +50,7 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 			Retention: nats.WorkQueuePolicy,
 			Replicas:  len(nc.DiscoveredServers()),
 			Storage:   nats.FileStorage,
+			MaxBytes:  1073741824,
 		})
 		if err != nil {
 			fmt.Println("error: " + err.Error())
@@ -62,6 +63,7 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 			Replicas: len(nc.DiscoveredServers()),
 			MaxAge:   2 * time.Minute,
 			Storage:  nats.FileStorage,
+			MaxBytes: 1073741824,
 		})
 		if err != nil {
 			fmt.Println("error: " + err.Error())
@@ -75,6 +77,7 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 			Replicas: len(nc.DiscoveredServers()),
 			MaxAge:   2 * time.Minute,
 			Storage:  nats.FileStorage,
+			MaxBytes: 1073741824,
 		})
 		if err != nil {
 			fmt.Println("error: " + err.Error())
