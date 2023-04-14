@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	msgSize, count, publishers, subscribers int
-	url, subject                            string
-	js, cleanjs, pub, sub, repeat, wqpolicy bool
+	msgSize, count, publishers, subscribers        int
+	url, subject                                   string
+	js, cleanjs, pub, sub, repeat, wqpolicy, queue bool
 )
 
 func init() {
@@ -27,7 +27,8 @@ func init() {
 	flag.BoolVar(&pub, "pub", false, "when enabled publish the messages to subject")
 	flag.BoolVar(&sub, "sub", false, "when enabled subscribe to subject")
 	flag.BoolVar(&repeat, "repeat", false, "continous publish/subscribe to the subject")
-	flag.BoolVar(&wqpolicy, "wq", false, "Use WorkQueue Policy for Jetstream")
+	flag.BoolVar(&wqpolicy, "wq", false, "use WorkQueue Policy for Jetstream")
+	flag.BoolVar(&queue, "queue", false, "join all the subscribers in a queue so that only one subscriber process the message")
 }
 
 func main() {
@@ -37,6 +38,11 @@ func main() {
 		nc, _ := nats.Connect(url)
 		internal.CleanJetstream(nc)
 		return
+	}
+
+	if wqpolicy && queue {
+		fmt.Println("either wq or queue should be provided, both values are supported")
+		os.Exit(1)
 	}
 	system := New()
 
@@ -70,7 +76,7 @@ func New() internal.MessagingSystem {
 		os.Exit(1)
 	}
 	if js {
-		return internal.NewJetstream(nc, subject, msgSize, publishers, subscribers, repeat, wqpolicy)
+		return internal.NewJetstream(nc, subject, msgSize, publishers, subscribers, repeat, wqpolicy, queue)
 	}
 	return internal.NewNatsCore(nc, subject, msgSize, publishers, subscribers, repeat)
 }
