@@ -1,54 +1,38 @@
-# Jetstream on minikube
+# Nats Jetstream
+
 
 ### Required tools
-* minikube
-* docker
 * helm
 * Go
 
-## Installation on Minikube.
-Start the minikube server
-Pull the nats server and prometheus nats exporter from docker and add to Minikube
+### Setup Nats cluster on K8S namespace
+run below command to install nats
 ```bash
-docker pull nats:latest
-synadia/prometheus-nats-exporter:latest
-minikube image load nats:latest
-minikube image load synadia/prometheus-nats-exporter:latest
-```
-Create a namespace nats-jetstream and switch to that namespace
-```bash
-kubectl create ns nats-jetstream
-k config set-context --current --namespace=nats-jetstream
-```
-install the helm template
-```bash
-helm template --namespace=nats-jetstream ./nats >> /tmp/release.yaml
-kubectl apply -f /tmp/release.yaml
+#have the ./nats/values.yaml prepared before running the below command
+helm template ./nats --namespace=<namespace value> | kubectl apply -f -
 ```
 
 ## Test Jetstream
-port forward all the nats endpoints of each instance to your local
+go into nats-testing directory and run main.go
 ```bash
-k port-forward svc/nats-0 4222:4222 8222:8222
-k port-forward svc/nats-1 4223:4222 8223:8222
-k port-forward svc/nats-2 4224:4222 8224:8222
+cd nats-testing
+go run ./main.go <args>
 ```
-build test go binary
-```bash
-go mod tidy
-go build -o nats-js
-```
-program take 3 argumets  
-__arg 1__: port of the server which you want to connect to  
-__arg 2__: 'pub' for publish && 'sub' for subsribe  
-__arg 3__: topic name of the subject  (batman or superman)
+This takes default argument values for testing.
+program take many argumets, try below command to view the available arguments
 
 ```bash
-# To publish messages to batman and superman topic, press ctrl^C to stop publishing
-./nats-js <port> pub
-# To subscribe messages to batman topic, press ctrl^C to stop subscribing if you want to stop in the middle or else program ends after reading all msgs from the topic
-./nats-js <port> sub batman
-# To subscribe messages to batman topic, press ctrl^C to stop subscribing if you want to stop in the middle
-or else program ends after reading all msgs from the topic
-./nats-js <port> sub superman
+go run ./main.go --help
 ```
+for publishing messages you need to pass ```--pub``` flag true and also needs to provide number of concurrent publishers by passing ```--publishers```  value
+for subscribing messages you need to pass ```--sub``` flag true and also needs to provide number of concurrent subscribers by passing ```--subscribers``` value
+
+for testing publishing/subscribing on jetstream pass ```--js``` flag other wise publishing and subscribing happens on Nats core where there is no persitence.  
+you can test different types of streams while publishing/subscribing to jetstream subjects
+not passing any of the below flags uses default stream __LimitsPolicy__.  
+```--queue``` flag uses default stream type __LimitsPolicy__, however subscribers are joined together as queue so message is processed by only one subscriber.  
+```--wq``` flag is used to test stream of type __WorkQueuePolicy__, where message is deleted from stream as soon as one subscriber process the message.  
+
+__NOTE__: you cannot pass both ```--queue``` and ```--wq``` flags together.
+
+```--clean``` will delete the stream and consumers on it.
