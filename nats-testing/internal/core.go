@@ -11,6 +11,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+// core struct is used to test Nats Core functionality, i.e., publishing/subscribing to normal nats subjects
 type core struct {
 	nc                               *nats.Conn
 	subject                          string
@@ -18,14 +19,17 @@ type core struct {
 	repeat                           bool
 }
 
+// NewNatsCore returns the core struct
 func NewNatsCore(nc *nats.Conn, subject string, msgSize, publishers, subscribers int, repeat bool) *core {
 	fmt.Println("Nats core initialized")
 	return &core{nc, subject, msgSize, publishers, subscribers, repeat}
 }
 
+// Publish method publishes messages to Nats Core and supports Publish method on MessegingSystem interface
 func (c *core) Publish(exit chan<- struct{}, length int) {
 	now := time.Now()
 	fmt.Println(now.Format(time.RFC3339))
+	// payload is created before publishing to prevent additional code execution after publishing starts
 	in := PrepareInput(length, c.msgSize)
 	var wg sync.WaitGroup
 	var totalMessages int = 0
@@ -64,6 +68,7 @@ func (c *core) Publish(exit chan<- struct{}, length int) {
 	exit <- struct{}{}
 }
 
+// post adds message header and publishes the message to Nats core
 func (c *core) post(i int, input []byte) {
 	header := make(nats.Header)
 	header.Add("publisher", fmt.Sprintf("publisher-%d", i))
@@ -80,6 +85,8 @@ func (c *core) post(i int, input []byte) {
 
 }
 
+// Subscribe method creates subscribers and subscribe to the Nats Core subject and
+// supports subscribe method on MessegingSystem interface
 func (c *core) Subscribe(exit chan<- struct{}) {
 
 	var wg sync.WaitGroup

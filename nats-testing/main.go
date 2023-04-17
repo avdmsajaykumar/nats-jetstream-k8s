@@ -15,6 +15,7 @@ var (
 	js, cleanjs, pub, sub, repeat, wqpolicy, queue bool
 )
 
+// Initialize flags and set default values in init function
 func init() {
 	flag.IntVar(&msgSize, "size", 1024, "payload size in bytes")
 	flag.IntVar(&count, "count", 1, "no of messages published by each publisher")
@@ -34,18 +35,24 @@ func init() {
 func main() {
 	flag.Parse()
 
+	// if cleanjs is enabled, remove the stream and stop from execution.
 	if cleanjs {
 		nc, _ := nats.Connect(url)
 		internal.CleanJetstream(nc)
 		return
 	}
 
+	// WorkQueuePolicy cannot have multiple consumer subscribers so we cannot create a queue to join multiple consumers
+	// not stream with WorkQueuePolicy, so stop from execution if both are provided
 	if wqpolicy && queue {
 		fmt.Println("either wq or queue should be provided, both values are supported")
 		os.Exit(1)
 	}
+
+	// Initilize either the core functionality or jetstream functionality based on the arguments
 	system := New()
 
+	// subchannel is to wait till all subscriptions are closed
 	subchannel := make(chan struct{})
 	if sub && subscribers != 0 {
 		go system.Subscribe(subchannel)
@@ -54,6 +61,7 @@ func main() {
 		go func() { subchannel <- struct{}{} }()
 	}
 
+	// pubchannel is to wait till all publishers are closed
 	pubchannel := make(chan struct{})
 	if pub && publishers != 0 {
 		fmt.Println("Publish")
@@ -69,6 +77,7 @@ func main() {
 	<-pubchannel
 }
 
+// New returns the core or jetstream struct which follows MessagingSystem interface
 func New() internal.MessagingSystem {
 	nc, err := nats.Connect(url)
 	if err != nil {

@@ -11,8 +11,12 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+// streamName is used to define the name of the stream,
+// also used to create other nats objects such as consumers, queuegroups
 var streamName string = "TESTSTREAM"
 
+// jetstream struct is used to test Nats jetstream functionality,
+// i.e., publishing/subscribing to Jetstream enabled nats subjects
 type jetstream struct {
 	nc                               *nats.Conn
 	js                               nats.JetStreamContext
@@ -21,6 +25,7 @@ type jetstream struct {
 	repeat, wqPolicy, queue          bool
 }
 
+// CleanJetstream removes the stream from the cluster
 func CleanJetstream(nc *nats.Conn) {
 	js, err := nc.JetStream()
 	if err != nil {
@@ -34,6 +39,7 @@ func CleanJetstream(nc *nats.Conn) {
 	fmt.Println("Removed stream " + streamName)
 }
 
+// NewNatsCore returns the jetstream struct
 func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscribers int, repeat, wqPolicy, queue bool) *jetstream {
 	js, err := nc.JetStream()
 	if err != nil {
@@ -42,27 +48,35 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 	var info *nats.StreamInfo
 	consumerName := ""
 	fmt.Printf("server count %d\n", len(nc.DiscoveredServers()))
-	// create stream
+
+	// create streams
+
 	if wqPolicy {
+		// creates stream with retention policy set to WorkQueuePolicy
 		info, err = js.AddStream(&nats.StreamConfig{
 			Name:      streamName,
 			Subjects:  []string{subject},
 			Retention: nats.WorkQueuePolicy,
 			Replicas:  len(nc.DiscoveredServers()),
 			Storage:   nats.FileStorage,
-			MaxBytes:  1073741824,
+			// MaxBytes is required to limit the streams to expand beyond the memory,
+			// not setting this causes jetstream to crash
+			MaxBytes: 1073741824,
 		})
 		if err != nil {
 			fmt.Println("error: " + err.Error())
 			os.Exit(1)
 		}
 	} else if queue {
+		// creates default stream with minimum config
 		info, err = js.AddStream(&nats.StreamConfig{
 			Name:     streamName,
 			Subjects: []string{subject},
 			Replicas: len(nc.DiscoveredServers()),
 			MaxAge:   2 * time.Minute,
 			Storage:  nats.FileStorage,
+			// MaxBytes is required to limit the streams to expand beyond the memory,
+			// not setting this causes jetstream to crash
 			MaxBytes: 1073741824,
 		})
 		if err != nil {
@@ -71,12 +85,15 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 		}
 
 	} else {
+		// creates default stream with minimum config
 		info, err = js.AddStream(&nats.StreamConfig{
 			Name:     streamName,
 			Subjects: []string{subject},
 			Replicas: len(nc.DiscoveredServers()),
 			MaxAge:   2 * time.Minute,
 			Storage:  nats.FileStorage,
+			// MaxBytes is required to limit the streams to expand beyond the memory,
+			// not setting this causes jetstream to crash
 			MaxBytes: 1073741824,
 		})
 		if err != nil {
@@ -85,6 +102,9 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 		}
 
 	}
+	// for stream with WorkQueuePolciy, creates a consumer to subscribe to the subject
+	// creating the consumer while subscribing will delete the consumer when drain is called
+	// so create a consumer explicitily is required
 	if info.Config.Retention == nats.WorkQueuePolicy {
 		consumerInfo, err := js.AddConsumer(info.Config.Name,
 			&nats.ConsumerConfig{
@@ -101,9 +121,12 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 	return &jetstream{nc, js, subject, consumerName, msgSize, publishers, subscribers, repeat, wqPolicy, queue}
 }
 
+// Publish method publishes messages to Nats Jetstream subjects
+// and supports Publish method on MessegingSystem interface
 func (jet *jetstream) Publish(exit chan<- struct{}, length int) {
 	now := time.Now()
 	fmt.Println(now.Format(time.RFC3339))
+	// payload is created before publishing to prevent additional code execution after publishing starts
 	in := PrepareInput(length, jet.msgSize)
 	var wg sync.WaitGroup
 	var totalMessages int = 0
@@ -143,6 +166,7 @@ func (jet *jetstream) Publish(exit chan<- struct{}, length int) {
 	exit <- struct{}{}
 }
 
+// post adds message header and publishes the message to Nats Jetstream
 func (jet *jetstream) post(i int, input []byte) {
 	header := make(nats.Header)
 	header.Add("publisher", fmt.Sprintf("publisher-%d", i))
@@ -159,6 +183,8 @@ func (jet *jetstream) post(i int, input []byte) {
 
 }
 
+// Subscribe method creates subscribers and subscribe to the Nats jetstream subject and
+// supports subscribe method on MessegingSystem interface
 func (jet *jetstream) Subscribe(exit chan<- struct{}) {
 
 	if jet.wqPolicy {
@@ -171,6 +197,8 @@ func (jet *jetstream) Subscribe(exit chan<- struct{}) {
 
 }
 
+// pullSubscribe method uses a pull subscribers required to listen to stream with
+// retention of type WorkQueuePolicy and fetches the message on the stream subject
 func (jet *jetstream) pullSubscribe(exit chan<- struct{}) {
 
 	var wg sync.WaitGroup
@@ -244,6 +272,8 @@ func (jet *jetstream) pullSubscribe(exit chan<- struct{}) {
 	exit <- struct{}{}
 }
 
+// queueSubscribe method adds all the subscribers to a queue group so that messages on stream subject are shared
+// between the subscribers. and won't be processed by all the connected consumers
 func (jet *jetstream) queueSubscribe(exit chan<- struct{}) {
 	var wg sync.WaitGroup
 
@@ -286,6 +316,7 @@ func (jet *jetstream) queueSubscribe(exit chan<- struct{}) {
 
 }
 
+// subscribe method subscribes to the stream subject and reads all the messages in the stream
 func (jet *jetstream) subscribe(exit chan<- struct{}) {
 	var wg sync.WaitGroup
 

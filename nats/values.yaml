@@ -2,28 +2,39 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# Key shoud be Namespace, All helm values needs to be declared under the namespace key
 keycore-vault-dev:
+  # metrics container configuration
   metrics:
+    # Nats metrics image
     image: synadia/prometheus-nats-exporter:0.6.2
+    # metrics container CPU Memory requests and limits
     requests:
       cpu: 50m
       memory: 16Mi
     limits:
       cpu: 256m
       memory: 64Mi
+  # nats container configuration
   nats:
+    # Nats container configuration
     image: nats:2.9.15-alpine
+    # Jetstream storage configuration
     jetstream:
+      # file storage Max limit, This should be less than pvc.storage value, ( some free space is needed for nats to operate )
       file: 4G
       memory: 256M
+    # nats container CPU Memory requests and limits
     requests:
       cpu: 1000m
       memory: 2Gi
     limits:
       cpu: 1500m
       memory: 3Gi
+    # PVC configuration for each Nats pod/server This value should be highest of all, greater than jetstream.file value
     pvc:
       storage: 5Gi
+  # replicaCount is equivalent to number of servers per nats cluster 
   replicaCount: 3
 
       
