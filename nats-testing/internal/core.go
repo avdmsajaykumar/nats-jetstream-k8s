@@ -21,14 +21,14 @@ type core struct {
 
 // NewNatsCore returns the core struct
 func NewNatsCore(nc *nats.Conn, subject string, msgSize, publishers, subscribers int, repeat bool) *core {
-	fmt.Println("Nats core initialized")
+	Info.Println("Nats core initialized")
 	return &core{nc, subject, msgSize, publishers, subscribers, repeat}
 }
 
 // Publish method publishes messages to Nats Core and supports Publish method on MessegingSystem interface
 func (c *core) Publish(exit chan<- struct{}, length int) {
 	now := time.Now()
-	fmt.Println(now.Format(time.RFC3339))
+	Info.Println("Time: " + now.Format(time.RFC3339))
 	// payload is created before publishing to prevent additional code execution after publishing starts
 	in := PrepareInput(length, c.msgSize)
 	var wg sync.WaitGroup
@@ -40,7 +40,7 @@ func (c *core) Publish(exit chan<- struct{}, length int) {
 		signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 		go func(i int, input *[][]byte) {
 			defer func() {
-				fmt.Printf("client %d publish completed\n", i)
+				Info.Printf("client %d publish completed\n", i)
 				wg.Done()
 			}()
 			if c.repeat {
@@ -63,8 +63,8 @@ func (c *core) Publish(exit chan<- struct{}, length int) {
 	}
 	wg.Wait()
 	// time.Sleep(1 * time.Millisecond)
-	fmt.Println(time.Since(now))
-	fmt.Printf("total messages published : %d\n", totalMessages)
+	Info.Println(time.Since(now))
+	Info.Printf("total messages published : %d\n", totalMessages)
 	exit <- struct{}{}
 }
 
@@ -80,7 +80,7 @@ func (c *core) post(i int, input []byte) {
 
 	err := c.nc.PublishMsg(msg)
 	if err != nil {
-		fmt.Println(err.Error())
+		Err.Println("error publishing the message: " + err.Error())
 	}
 
 }
@@ -104,23 +104,23 @@ func (c *core) Subscribe(exit chan<- struct{}) {
 			sub, err := c.nc.Subscribe(c.subject, func(m *nats.Msg) {
 				f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
-					fmt.Println(err.Error())
+					Err.Println("error opening the file: " + err.Error())
 				}
 				defer f.Close()
-				fmt.Println(m.Header.Get("publisher"))
+				Info.Println(m.Header.Get("publisher"))
 				// if _, err := f.WriteString(m.Header.Get("publisher") + "\t" + string(m.Data) + "\n"); err != nil {
-				// 	fmt.Println(err)
+				// 	Info.Println(err)
 				// }
 			})
 			if err != nil {
-				fmt.Println(err.Error())
+				Err.Println("error subscribing : " + err.Error())
 			}
 			<-sig
 			err = sub.Unsubscribe()
 			if err != nil {
-				fmt.Println(err.Error())
+				Err.Println("error unsubscribing " + err.Error())
 			}
-			fmt.Printf("subscriber %d stopped\n", i)
+			Info.Printf("subscriber %d stopped\n", i)
 		}(i)
 	}
 	wg.Wait()

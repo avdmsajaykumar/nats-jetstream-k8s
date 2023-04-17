@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"time"
@@ -10,7 +11,11 @@ import (
 
 const charset = "abcdefghijklmnopqrstuvwxyz" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+var (
+	seededRand *rand.Rand  = rand.New(rand.NewSource(time.Now().UnixNano()))
+	Info       *log.Logger = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+	Err        *log.Logger = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+)
 
 // input is the payload and Description of this struct follows the payload size
 type input struct {
@@ -49,6 +54,7 @@ func PrepareInput(length, msgSize int) [][]byte {
 
 	err := os.WriteFile(fmt.Sprintf("%s/file.txt", path), []byte(body), 0777)
 	if err != nil {
+		Err.Printf("error writing to the file %s/n", err.Error())
 		os.Exit(1)
 	}
 

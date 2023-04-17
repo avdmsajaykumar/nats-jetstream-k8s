@@ -33,10 +33,10 @@ func CleanJetstream(nc *nats.Conn) {
 	}
 	err = js.DeleteStream(streamName)
 	if err != nil {
-		fmt.Println(err.Error())
+		Err.Println("error deleting stream " + err.Error())
 		os.Exit(1)
 	}
-	fmt.Println("Removed stream " + streamName)
+	Info.Println("Removed stream " + streamName)
 }
 
 // NewNatsCore returns the jetstream struct
@@ -47,7 +47,7 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 	}
 	var info *nats.StreamInfo
 	consumerName := ""
-	fmt.Printf("server count %d\n", len(nc.DiscoveredServers()))
+	Info.Printf("server count %d\n", len(nc.DiscoveredServers()))
 
 	// create streams
 
@@ -64,7 +64,7 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 			MaxBytes: 1073741824,
 		})
 		if err != nil {
-			fmt.Println("error: " + err.Error())
+			Err.Println("error creating stream: " + err.Error())
 			os.Exit(1)
 		}
 	} else if queue {
@@ -80,7 +80,7 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 			MaxBytes: 1073741824,
 		})
 		if err != nil {
-			fmt.Println("error: " + err.Error())
+			Err.Println("error creating stream: " + err.Error())
 			os.Exit(1)
 		}
 
@@ -97,7 +97,7 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 			MaxBytes: 1073741824,
 		})
 		if err != nil {
-			fmt.Println("error: " + err.Error())
+			Err.Println("error creating stream: " + err.Error())
 			os.Exit(1)
 		}
 
@@ -112,12 +112,12 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 				AckPolicy: nats.AckExplicitPolicy,
 			})
 		if err != nil {
-			fmt.Println(err.Error())
+			Err.Println("error creating consumer: " + err.Error())
 		}
 		consumerName = consumerInfo.Config.Durable
 	}
-	fmt.Println("Stream Name: " + info.Config.Name)
-	fmt.Println("Nats jetstream initialized")
+	Info.Println("Stream Name: " + info.Config.Name)
+	Info.Println("Nats jetstream initialized")
 	return &jetstream{nc, js, subject, consumerName, msgSize, publishers, subscribers, repeat, wqPolicy, queue}
 }
 
@@ -125,7 +125,7 @@ func NewJetstream(nc *nats.Conn, subject string, msgSize, publishers, subscriber
 // and supports Publish method on MessegingSystem interface
 func (jet *jetstream) Publish(exit chan<- struct{}, length int) {
 	now := time.Now()
-	fmt.Println(now.Format(time.RFC3339))
+	Info.Println("Date: " + now.Format(time.RFC3339))
 	// payload is created before publishing to prevent additional code execution after publishing starts
 	in := PrepareInput(length, jet.msgSize)
 	var wg sync.WaitGroup
@@ -137,7 +137,7 @@ func (jet *jetstream) Publish(exit chan<- struct{}, length int) {
 		signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 		go func(i int, input *[][]byte) {
 			defer func() {
-				fmt.Printf("client %d publish completed\n", i)
+				Info.Printf("client %d publish completed\n", i)
 				wg.Done()
 			}()
 
@@ -161,8 +161,8 @@ func (jet *jetstream) Publish(exit chan<- struct{}, length int) {
 	}
 	wg.Wait()
 	// time.Sleep(1 * time.Millisecond)
-	fmt.Println(time.Since(now))
-	fmt.Printf("total messages published : %d\n", totalMessages)
+	Info.Println(time.Since(now))
+	Info.Printf("total messages published : %d\n", totalMessages)
 	exit <- struct{}{}
 }
 
@@ -178,7 +178,7 @@ func (jet *jetstream) post(i int, input []byte) {
 
 	_, err := jet.js.PublishMsg(msg)
 	if err != nil {
-		fmt.Println(err.Error())
+		Err.Println("error publshing message " + err.Error())
 	}
 
 }
@@ -215,42 +215,37 @@ func (jet *jetstream) pullSubscribe(exit chan<- struct{}) {
 			os.Remove(filename)
 			sub, err := jet.js.PullSubscribe(jet.subject, jet.consumerName, nats.BindStream(streamName))
 			if err != nil {
-				fmt.Println(err.Error())
+				Err.Println("Error calling pull subscribe " + err.Error())
 			}
 
 			for {
 				select {
 				case <-sig:
 					if err = sub.Drain(); err != nil {
-						fmt.Println(err.Error())
+						Err.Println("error draining " + err.Error())
 					}
 
 					if err = sub.Unsubscribe(); err != nil {
-						fmt.Println(err.Error())
+						Err.Println("error unsubscribing " + err.Error())
 					}
 
-					if err != nil {
-						fmt.Println(err.Error())
-					}
-					fmt.Printf("subscriber %d stopped\n", i)
+					Info.Printf("subscriber %d stopped\n", i)
 					return
 
 				default:
 					msg, err := sub.Fetch(1)
 					if err != nil {
-						fmt.Println("Error Fetching: " + err.Error())
+						Err.Println("Error Fetching: " + err.Error())
 					}
 					if len(msg) == 0 {
 						continue
 					}
 					m := msg[0]
-					if err := m.Ack(); err != nil {
-						fmt.Println(err.Error())
-					}
+					err = m.Ack()
 					if err != nil {
-						fmt.Println(err.Error())
+						Err.Println("error Ack " + err.Error())
 						if err = m.Nak(); err != nil {
-							fmt.Println(err.Error())
+							Err.Println("error Nak" + err.Error())
 						}
 
 					}
@@ -258,7 +253,7 @@ func (jet *jetstream) pullSubscribe(exit chan<- struct{}) {
 					// if err != nil {
 					// 	fmt.Println(err.Error())
 					// }
-					fmt.Println(m.Header.Get("publisher"))
+					Info.Println(m.Header.Get("publisher"))
 					// if _, err := f.WriteString(m.Header.Get("publisher") + "\t" + string(m.Data) + "\n"); err != nil {
 					// 	fmt.Println(err)
 					// }
@@ -289,7 +284,7 @@ func (jet *jetstream) queueSubscribe(exit chan<- struct{}) {
 			os.Remove(filename)
 			sub, err := jet.js.QueueSubscribe(jet.subject, streamName, func(m *nats.Msg) {
 				_ = m.Ack()
-				fmt.Printf("processed by subscriber %d\t msg from %s\n", i, m.Header.Get("publisher"))
+				Info.Printf("processed by subscriber %d\t msg from %s\n", i, m.Header.Get("publisher"))
 				// f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				// if err != nil {
 				// 	fmt.Println(err.Error())
@@ -301,14 +296,14 @@ func (jet *jetstream) queueSubscribe(exit chan<- struct{}) {
 
 			})
 			if err != nil {
-				fmt.Println("pull " + err.Error())
+				Err.Println("error subscribing " + err.Error())
 			}
 			<-sig
 			err = sub.Unsubscribe()
 			if err != nil {
-				fmt.Println(err.Error())
+				Err.Println("error unsubscribing" + err.Error())
 			}
-			fmt.Printf("subscriber %d stopped\n", i)
+			Info.Printf("subscriber %d stopped\n", i)
 		}(i)
 	}
 	wg.Wait()
@@ -331,7 +326,7 @@ func (jet *jetstream) subscribe(exit chan<- struct{}) {
 			filename := fmt.Sprintf("subscriber-%d.log", i)
 			os.Remove(filename)
 			sub, err := jet.js.Subscribe(jet.subject, func(m *nats.Msg) {
-				fmt.Println(m.Header.Get("publisher"))
+				Info.Println(m.Header.Get("publisher"))
 				// f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				// if err != nil {
 				// 	fmt.Println(err.Error())
@@ -342,14 +337,14 @@ func (jet *jetstream) subscribe(exit chan<- struct{}) {
 				// }
 			})
 			if err != nil {
-				fmt.Println(err.Error())
+				Err.Println("error subscribing " + err.Error())
 			}
 			<-sig
 			err = sub.Unsubscribe()
 			if err != nil {
-				fmt.Println(err.Error())
+				Err.Println("error unsubscribing " + err.Error())
 			}
-			fmt.Printf("subscriber %d stopped\n", i)
+			Info.Printf("subscriber %d stopped\n", i)
 		}(i)
 	}
 	wg.Wait()

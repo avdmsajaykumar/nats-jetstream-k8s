@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/avdmsajaykumar/nats/nats-testing/internal"
@@ -13,6 +14,9 @@ var (
 	msgSize, count, publishers, subscribers        int
 	url, subject                                   string
 	js, cleanjs, pub, sub, repeat, wqpolicy, queue bool
+
+	Info *log.Logger = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+	Err  *log.Logger = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 )
 
 // Initialize flags and set default values in init function
@@ -45,7 +49,7 @@ func main() {
 	// WorkQueuePolicy cannot have multiple consumer subscribers so we cannot create a queue to join multiple consumers
 	// not stream with WorkQueuePolicy, so stop from execution if both are provided
 	if wqpolicy && queue {
-		fmt.Println("either wq or queue should be provided, both values are supported")
+		Err.Println("either wq or queue should be provided, both values are supported")
 		os.Exit(1)
 	}
 
@@ -64,15 +68,15 @@ func main() {
 	// pubchannel is to wait till all publishers are closed
 	pubchannel := make(chan struct{})
 	if pub && publishers != 0 {
-		fmt.Println("Publish")
+		Info.Println("Publishing initiated")
 		go system.Publish(pubchannel, count)
 	} else {
-		fmt.Println("Publish disabled")
+		Info.Println("Publish disabled")
 		go func() { pubchannel <- struct{}{} }()
 	}
 
 	// wait for channels to respond
-	fmt.Println("waiting for channels to close")
+	Info.Println("waiting for channels to close")
 	<-subchannel
 	<-pubchannel
 }
@@ -81,7 +85,7 @@ func main() {
 func New() internal.MessagingSystem {
 	nc, err := nats.Connect(url)
 	if err != nil {
-		fmt.Println(err.Error())
+		Err.Println("Error Connecting to Nats: " + err.Error())
 		os.Exit(1)
 	}
 	if js {
