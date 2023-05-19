@@ -142,19 +142,23 @@ func (jet *jetstream) Publish(exit chan<- struct{}, length int) {
 			}()
 
 			if jet.repeat {
+				count := 0
 				for {
 					select {
 					case <-sig:
 						return
 					default:
-						jet.post(i, (*input)[0])
+						count++
+						jet.post(i, count, (*input)[0])
 						totalMessages++
 					}
 				}
 
 			} else {
+				count := 0
 				for j := 0; j < len(*input); j++ {
-					jet.post(i, (*input)[j])
+					count++
+					jet.post(i, count, (*input)[j])
 				}
 			}
 		}(i, &in)
@@ -167,9 +171,9 @@ func (jet *jetstream) Publish(exit chan<- struct{}, length int) {
 }
 
 // post adds message header and publishes the message to Nats Jetstream
-func (jet *jetstream) post(i int, input []byte) {
+func (jet *jetstream) post(i, count int, input []byte) {
 	header := make(nats.Header)
-	header.Add("publisher", fmt.Sprintf("publisher-%d", i))
+	header.Add("publisher", fmt.Sprintf("publisher-%d: message %d", i, count))
 	msg := &nats.Msg{
 		Header:  header,
 		Data:    input,

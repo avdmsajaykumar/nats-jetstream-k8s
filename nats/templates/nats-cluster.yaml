@@ -170,5 +170,5 @@ spec:
           claimName: {{ $release.Namespace }}-nats-{{ $i }}-pvc
 {{ end }}
 {{ else }}
-{{ fail "values should be specifiedunder a Namespace key" }}
+{{ fail "values should be specified under a Namespace key" }}
 {{ end }}
